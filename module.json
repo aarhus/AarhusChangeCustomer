@@ -1,0 +1,18 @@
+{
+    "name": "Aarhus Change Customer",
+    "alias": "aarhuschangecustomer",
+    "description": "AarhusChangeCustomer adds a link to the conversation if we can automatically unsub",
+    "version": "1.0.0",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\AarhusChangeCustomer\\Providers\\AarhusChangeCustomerServiceProvider"
+    ],
+    "img": "/modules/aarhuschangecustomer/img/module.svg",
+    "aliases": {},
+    "files": [
+        "start.php"
+    ],
+    "requires": []
+}
