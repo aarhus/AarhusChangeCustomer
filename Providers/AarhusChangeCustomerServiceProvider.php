@@ -58,16 +58,16 @@ define('AARHUSCHANGECUSTOMER_MODULE', 'aarhuschangecustomer');
 class AarhusChangeCustomerServiceProvider extends ServiceProvider
 {
     /**
-     * Indicates if loading of the provider is deferred.
-     *
-     * @var bool
+     Indicates if loading of the provider is deferred.
+    
+     @var bool
      */
     protected $defer = false;
 
     /**
-     * Boot the application events.
-     *
-     * @return void
+     Boot the application events.
+    
+     @return void
      */
     public function boot()
     {
@@ -77,11 +77,16 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
         $this->registerFactories();
         $this->loadMigrationsFrom(__DIR__ . '/../Database/Migrations');
 
-	$this->hooks();
+        $this->hooks();
 
     }
 
+
+    /**
+     Add all of the hooks.
     
+     @return void
+     */
     public function hooks()
     {
 
@@ -89,42 +94,44 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
             'conversation.created_by_customer',
             function ($conversation, $thread, $customer) {
 
-            	$settings = \Option::getOptions([
-                	'aarhuschangecustomer.active',
-                	'aarhuschangecustomer.ruleset',
-            	]);
+                $settings = \Option::getOptions(
+                    [
+                    'aarhuschangecustomer.active',
+                    'aarhuschangecustomer.ruleset',
+                    ]
+                );
 
-		if ($settings['aarhuschangecustomer.active']!=="on") {
-			\Helper::Log("Wibble", "system not active: ");
-			return $conversation;
-		}
+                if ($settings['aarhuschangecustomer.active']!=="on") {
+                    \Helper::Log("Wibble", "system not active: ");
+                    return $conversation;
+                }
 
-		$rules = [];
+                $rules = [];
 
-		try {
-			$rules = json_decode($settings['aarhuschangecustomer.ruleset'], 1);
-		}
-		catch (Exception $exception) {
-			\Helper::Log("Wibble", "Exception when decoding ruleset");
-			return $conversation;
-		}
+                try {
+                    $rules = json_decode($settings['aarhuschangecustomer.ruleset'], 1);
+                }
+                catch (Exception $exception) {
+                    \Helper::Log("Wibble", "Exception when decoding ruleset");
+                    return $conversation;
+                }
 
-		
-		$body = html_entity_decode($thread->body);
 
-		$matches = $this->checkForMatches($conversation->customer_email, $conversation->mailbox_id, $body, $rules);
-	
-		if (!isset($matches["email"])) {
-			return $conversation;
-		}
+                $body = html_entity_decode($thread->body);
 
-		
+                $matches = $this->checkForMatches($conversation->customer_email, $conversation->mailbox_id, $body, $rules);
+
+                if (!isset($matches["email"])) {
+                    return $conversation;
+                }
+
+
 
                 $c = Customer::Create($matches["email"], $matches);
                 $c->save();
                 $conversation->changeCustomer($matches["email"], $c);
 
-		\Helper::Log("Wibble", json_encode($matches));
+                \Helper::Log("Wibble", json_encode($matches));
                 return $conversation;
             },
             20,
@@ -132,64 +139,85 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
         );
 
 
-        \Eventy::addFilter('settings.sections', function($sections) {
-            $sections['aarhuschangecustomer'] = ['title' => __('ACCustomer'), 'icon' => 'user', 'order' => 700];
+        \Eventy::addFilter(
+            'settings.sections', function ($sections) {
+                $sections['aarhuschangecustomer'] = ['title' => __('ACCustomer'), 'icon' => 'user', 'order' => 700];
 
-            return $sections;
-        }, 30);
+                return $sections;
+            }, 30
+        );
 
 
-	        // Section settings
-        \Eventy::addFilter('settings.section_settings', function($settings, $section) {
+        // Section settings
+        \Eventy::addFilter(
+            'settings.section_settings', function ($settings, $section) {
 
-            if ($section != 'aarhuschangecustomer') {
+                if ($section != 'aarhuschangecustomer') {
+                    return $settings;
+                }
+
+                $settings = \Option::getOptions(
+                    [
+                    'aarhuschangecustomer.active',
+                    'aarhuschangecustomer.ruleset',
+                    ]
+                );
+
                 return $settings;
-            }
-
-            $settings = \Option::getOptions([
-                'aarhuschangecustomer.active',
-                'aarhuschangecustomer.ruleset',
-            ]);
-
-            return $settings;
-        }, 20, 2);
+            }, 20, 2
+        );
 
         // Section parameters.
-        \Eventy::addFilter('settings.section_params', function($params, $section) {
-            if ($section != 'aarhuschangecustomer') {
-                return $params;
-            }
+        \Eventy::addFilter(
+            'settings.section_params', function ($params, $section) {
+                if ($section != 'aarhuschangecustomer') {
+                    return $params;
+                }
 
-            $params = [
+                $params = [
                 'template_vars' => [],
                 'validator_rules' => [],
-            ];
+                ];
 
-            return $params;
-        }, 20, 2);
+                return $params;
+            }, 20, 2
+        );
 
         // Settings view name
-        \Eventy::addFilter('settings.view', function($view, $section) {
-            if ($section != 'aarhuschangecustomer') {
-                return $view;
-            } else {
-                return 'aarhuschangecustomer::index';
-            }
-        }, 20, 2);
+        \Eventy::addFilter(
+            'settings.view', function ($view, $section) {
+                if ($section != 'aarhuschangecustomer') {
+                    return $view;
+                } else {
+                    return 'aarhuschangecustomer::index';
+                }
+            }, 20, 2
+        );
 
 
 
-}
+    }
 
-	public function checkForMatches($from, $mailbox, $body, $rules) {
+    /**
+     Check if message matches any rules.
+    
+     @param string $from    string of email address
+     @param number $mailbox number of mailbox receiving the message
+     @param string $body    string of message body
+     @param array  $rules   rules to follow
+    
+     @return array
+     */
+    public function checkForMatches($from, $mailbox, $body, $rules)
+    {
         if (!isset($rules[$from])) {
-                return [];
+            return [];
         }
 
 
 
         if (!in_array($mailbox, $rules[$from]["mailboxes"] ?? [$mailbox])) {
-                return [];
+            return [];
         }
 
 
@@ -197,85 +225,91 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
         $customer = [];
         foreach (($rules[$from]["matches"] ?? [])  as $rule) {
 
-                $found = false;
+            $found = false;
 
-                foreach ($rule as $find=>$config) {
-
-
-                        $matches = [];
-
-                        $r = preg_match($find, $body, $matches);
-
-                        if (!$r) {
-                                if (($config["stop"] ?? "_") == "_notfound") {
-                                        return $customer;
-                                }
-                                continue;
-                        }
+            foreach ($rule as $find=>$config) {
 
 
-                        foreach (($config["fields"] ?? []) as $key=>$index) {
+                $matches = [];
 
-                                if (isset($customer[$key])) { continue; }
+                $r = preg_match($find, $body, $matches);
 
-
-                                $value = trim($matches[$index+1] ?? "");
-
-                                if (strlen($value)==0) { continue; }
-
-                                $found = true;
-
-
-                                if ($key!="name") {
-                                        $customer[$key]=$value;
-                                        continue;
-                                }
-
-
-                                $n = array_filter(explode(" ", trim($matches[1], " \n\r\t\v\x00\"")), function ($x) {
-                                        return strlen($x)>0;
-                                });
-
-                                if (isset($n[0])) {
-                                        $customer["first_name"]=$n[0];
-                                }
-
-                                if (isset($n[1])) {
-                                        $customer["last_name"]=$n[1];
-                                }
-                        }
-
-
-
-                        if (!isset($config["stop"])) {
-                                continue;
-                        }
-
-                        if ($config["stop"] === "_always") {
-                                return $customer;
-                        }
-
-                        if ($config["stop"] === "_found" ) {
-                                return $customer;
-                        }
-
-                        $f = explode(",", $config["stop"]);
-                        $ok = true;
-
-                        foreach ($f as $r) {
-                                $r=trim($r);
-                                if (strlen($r)==0 || isset($customer[$r])) {
-                                        continue;
-                                }
-                                $ok = false;
-                                break;
-                        }
-
-                        if ($ok) {
-                                return $customer;
-                        }
-
+                if (!$r) {
+                    if (($config["stop"] ?? "_") == "_notfound") {
+                        return $customer;
+                    }
+                    continue;
                 }
+
+
+                foreach (($config["fields"] ?? []) as $key=>$index) {
+
+                    if (isset($customer[$key])) {
+                        continue;
+                    }
+
+
+                    $value = trim($matches[$index+1] ?? "");
+
+                    if (strlen($value)==0) {
+                        continue;
+                    }
+
+                    $found = true;
+
+
+                    if ($key!="name") {
+                        $customer[$key]=$value;
+                        continue;
+                    }
+
+
+                    $n = array_filter(
+                        explode(" ", trim($matches[1], " \n\r\t\v\x00\"")), function ($x) {
+                            return strlen($x)>0;
+                        }
+                    );
+
+                    if (isset($n[0])) {
+                                $customer["first_name"]=$n[0];
+                    }
+
+                    if (isset($n[1])) {
+                        $customer["last_name"]=$n[1];
+                    }
+                }
+
+
+
+                if (!isset($config["stop"])) {
+                    continue;
+                }
+
+                if ($config["stop"] === "_always") {
+                    return $customer;
+                }
+
+                if ($config["stop"] === "_found" ) {
+                    return $customer;
+                }
+
+                $f = explode(",", $config["stop"]);
+                $ok = true;
+
+                foreach ($f as $r) {
+                    $r=trim($r);
+                    if (strlen($r)==0 || isset($customer[$r])) {
+                        continue;
+                    }
+                    $ok = false;
+                    break;
+                }
+
+                if ($ok) {
+                    return $customer;
+                }
+
+            }
 
         }
         return $customer;
@@ -283,16 +317,16 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
 
 
 
-}
+    }
 
 
 
 
 
     /**
-     * Register the service provider.
-     *
-     * @return void
+     Register the service provider.
+    
+     @return void
      */
     public function register()
     {
@@ -300,15 +334,15 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register config.
-     *
-     * @return void
+     Register config.
+    
+     @return void
      */
     protected function registerConfig()
     {
         $this->publishes(
             [
-                __DIR__ . '/../Config/config.php' => config_path('aarhuschangecustomer.php'),
+            __DIR__ . '/../Config/config.php' => config_path('aarhuschangecustomer.php'),
             ],
             'config'
         );
@@ -319,9 +353,9 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register views.
-     *
-     * @return void
+     Register views.
+    
+     @return void
      */
     public function registerViews()
     {
@@ -331,7 +365,7 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
 
         $this->publishes(
             [
-                $sourcePath => $viewPath
+            $sourcePath => $viewPath
             ],
             'views'
         );
@@ -340,7 +374,7 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
             array_merge(
                 array_map(
                     function ($path) {
-                        return $path . '/modules/aarhuschangecustomer';
+                            return $path . '/modules/aarhuschangecustomer';
                     }, \Config::get('view.paths')
                 ),
                 [$sourcePath]
@@ -350,9 +384,9 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register translations.
-     *
-     * @return void
+     Register translations.
+    
+     @return void
      */
     public function registerTranslations()
     {
@@ -366,11 +400,11 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register an additional directory of factories.
-     *
-     * @source https://github.com/sebastiaanluca/laravel-resource-flow/blob/develop/src/Modules/ModuleServiceProvider.php#L66
-     *
-     * @return void
+     Register an additional directory of factories.
+    
+     @source https://github.com/sebastiaanluca/laravel-resource-flow/blob/develop/src/Modules/ModuleServiceProvider.php#L66
+    
+     @return void
      */
     public function registerFactories()
     {
@@ -380,9 +414,9 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
     /**
-     * Get the services provided by the provider.
-     *
-     * @return array
+     Get the services provided by the provider.
+    
+     @return array
      */
     public function provides()
     {
@@ -391,11 +425,11 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
 
 
     /**
-     * Remove the specified resource from storage.
-     *
-     * @param string $h string of headers
-     *
-     * @return Response
+     Remove the specified resource from storage.
+    
+     @param string $h string of headers
+    
+     @return Response
      */
     function getMyHeaders($h)
     {
