@@ -1,8 +1,8 @@
 {
     "name": "Aarhus Change Customer",
     "alias": "aarhuschangecustomer",
-    "description": "AarhusChangeCustomer adds a link to the conversation if we can automatically unsub",
-    "version": "1.0.0",
+    "description": "AarhusChangeCustomer rewrites the customer based on extracting information from the body of the text",
+    "version": "2.0.0",
     "keywords": [],
     "active": 1,
     "order": 0,

@@ -28,5 +28,13 @@
 
 return [
 
+	"name"=> "Aarhus Change Customer",
+	'options' => [
+
+		 'active' => ['default' => 'off'],
+    'ruleset' => ['default' => ""],
+
+],
+
 
 ];
