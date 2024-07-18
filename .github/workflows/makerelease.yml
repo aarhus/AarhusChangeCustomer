@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    uses: .github/workflows/buildchecks.yml@main
+    uses: ./.github/workflows/buildchecks.yml
 
   makerelease:
     needs: build
