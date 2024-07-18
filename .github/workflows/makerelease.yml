@@ -1,0 +1,45 @@
+name: Checks
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: .github/workflows/buildchecks.yml@main
+
+  makerelease:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Prepare files
+        run: |
+          mkdir AarhusChangeCustomer
+          # Move everything except .git and README.md into the AarhusChangeCustomer folder
+          find . -maxdepth 1 ! -name .git ! -name .github ! -name AarhusChangeCustomer ! -name . ! -name README.md -exec mv {} AarhusChangeCustomer/ \;
+
+      - name: Archive repository
+        run: |
+          zip -r "${GITHUB_REF_NAME}.zip" AarhusChangeCustomer
+
+  release:
+    needs: makerelease
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${GITHUB_REF_NAME}.zip"
