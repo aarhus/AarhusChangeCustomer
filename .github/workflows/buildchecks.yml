@@ -1,14 +1,10 @@
 name: Checks
 
 on:
-  workflow_call:
-    inputs:
-      config-path:
-        required: false
-        type: string
-
   push:
     branches: ["main"]
+    tags:
+      - "*"
   pull_request:
     branches: ["main"]
 
