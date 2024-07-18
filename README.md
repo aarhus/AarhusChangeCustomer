@@ -1,9 +1,10 @@
 # Automatically update customer based on body of emails
 
-Fed up with changing the customer when you receive a form submission or other automated email?  This module is for you!
+[![Checks](https://github.com/aarhus/AarhusChangeCustomer/actions/workflows/buildchecks.yml/badge.svg)](https://github.com/aarhus/AarhusChangeCustomer/actions/workflows/buildchecks.yml)
+
+Fed up with changing the customer when you receive a form submission or other automated email? This module is for you!
 
 Config is carried out using JSON - here is a simple example - one for a form submitted using Webflow, and another being an unmatched email response from a school MIS system
-
 
 ```
 
@@ -58,3 +59,4 @@ Still very much a work in progress - hoping to make the JSON config more user fr
 Free to use, but if you end up using it in an organisation with 20 or more users, or provide it as part of another package or service, please consider support me via https://ko-fi.com/aarhus and/or helping with the development/maintenance.
 
 Thanks
+```
