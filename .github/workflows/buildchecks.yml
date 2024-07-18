@@ -52,19 +52,19 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
       - name: Prepare files
-
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           mkdir AarhusChangeCustomer
           # Move everything except .git and README.md into the AarhusChangeCustomer folder
           find . -maxdepth 1 ! -name .git ! -name .github ! -name AarhusChangeCustomer ! -name . ! -name README.md -exec mv {} AarhusChangeCustomer/ \;
 
       - name: Archive repository
-
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           zip -r "${GITHUB_REF_NAME}.zip" AarhusChangeCustomer
 
       - name: "Create Release"
-
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${GITHUB_REF_NAME}.zip"
