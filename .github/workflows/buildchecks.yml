@@ -52,7 +52,6 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
       - name: Prepare files
-        if: github.event.push.tags && github.actor.permissions.contents.write
 
         run: |
           mkdir AarhusChangeCustomer
@@ -60,12 +59,12 @@ jobs:
           find . -maxdepth 1 ! -name .git ! -name .github ! -name AarhusChangeCustomer ! -name . ! -name README.md -exec mv {} AarhusChangeCustomer/ \;
 
       - name: Archive repository
-        if: github.event.push.tags && github.actor.permissions.contents.write
+
         run: |
           zip -r "${GITHUB_REF_NAME}.zip" AarhusChangeCustomer
 
       - name: "Create Release"
-        if: github.event.push.tags && github.actor.permissions.contents.write
+
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${GITHUB_REF_NAME}.zip"
