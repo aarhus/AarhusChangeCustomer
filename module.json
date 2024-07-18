@@ -2,7 +2,7 @@
     "name": "Aarhus Change Customer",
     "alias": "aarhuschangecustomer",
     "description": "AarhusChangeCustomer rewrites the customer based on extracting information from the body of the text",
-    "version": "0.0.4",
+    "version": "0.0.10",
     "keywords": [],
     "active": 1,
     "order": 0,
