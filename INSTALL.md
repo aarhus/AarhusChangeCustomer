@@ -6,13 +6,13 @@ Other installations are possible, but not supported here.
 
 1. Download the [latest release of UnSub](https://github.com/aarhus/AarhusChangeCustomer).
 
- ```sh
+   ```sh
    wget https://github.com/aarhus/AarhusChangeCustomer/archive/refs/tags/v0.0.11.zip
 
    # or
 
    wget https://github.com/aarhus/AarhusChangeCustomer/archive/refs/tags/v0.0.11.tar.gz
-```
+   ```
    
 
 2. Uncompress the file and then rename the directory from AarhusChangeCustomer-v0.0.11 to AarhusChangeCustomer
