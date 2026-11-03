@@ -14,5 +14,7 @@
     "files": [
         "start.php"
     ],
-    "requires": []
+    "requires": [],
+    "latestVersionUrl": "https://github.com/aarhus/AarhusChangeCustomer/releases/latest/download/version.txt",
+    "latestVersionZipUrl": "https://github.com/aarhus/AarhusChangeCustomer/releases/latest/download/AarhusChangeCustomer.zip"
 }
