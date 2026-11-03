@@ -1,0 +1,24 @@
+name: Compatibility
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5.12'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - name: Check out FreeScout 1.8.248
+        uses: actions/checkout@v4
+        with:
+          repository: freescout-helpdesk/freescout
+          ref: 56c4d014cfbd5e0b038cc887d71e0c75fd6c3f1b
+          path: .compat/freescout-1.8.248
+      - name: Run compatibility regressions
+        run: php -d error_reporting=32767 -d display_errors=1 Tests/compatibility.php

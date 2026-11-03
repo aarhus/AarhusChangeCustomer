@@ -60,3 +60,33 @@ Free to use, but if you end up using it in an organisation with 20 or more users
 
 Thanks
 ```
+
+## PHP 8.5 / FreeScout 1.8.248 compatibility
+
+The local compatibility branch targets PHP 8.5.12 and FreeScout 1.8.248.
+Saved rules work both as JSON strings and as arrays decoded by FreeScout.
+The settings form validates JSON, mailbox IDs, capture indexes and regular
+expressions before saving. Existing malformed configuration leaves the customer
+unchanged. Extracted email addresses must pass email validation.
+
+Names use the configured zero-based capture index. The first word becomes the
+first name; the remaining words become the last name. An explicit first_name
+or last_name already extracted by an earlier rule is retained.
+
+Stop conditions: `_found` stops on a match, `_notfound` stops on a nonmatch,
+`_always` stops after the rule whether it matched or not. A comma-separated
+list stops when all named fields have been extracted. A PCRE execution error
+abandons the entire match result so partially extracted data is not applied.
+
+Run the regression suite with the exact FreeScout source checkout:
+
+```sh
+git clone --depth 1 --branch 1.8.248 https://github.com/freescout-helpdesk/freescout.git .compat/freescout-1.8.248
+php -d error_reporting=32767 -d display_errors=1 Tests/compatibility.php
+```
+
+The compatibility workflow checks out the pinned FreeScout commit and runs
+with PHP 8.5.12. Tests use real FreeScout classes and Blade where possible;
+see the test files for substituted application services and test boundaries.
+A deployment should additionally verify actual incoming mail and persisted
+customer changes in an isolated FreeScout installation.

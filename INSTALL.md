@@ -4,7 +4,7 @@ These instructions assume you installed FreeScout using the [recommended process
 
 Other installations are possible, but not supported here.
 
-1. Download the [latest release of UnSub](https://github.com/aarhus/AarhusChangeCustomer).
+1. Download the [latest release of AarhusChangeCustomer](https://github.com/aarhus/AarhusChangeCustomer).
 
    ```sh
    wget https://github.com/aarhus/AarhusChangeCustomer/archive/refs/tags/v0.0.11.zip
