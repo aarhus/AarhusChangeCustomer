@@ -32,7 +32,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
 
 use App\Customer;
-use App\Thread;
+
 
 
 //use Modules\AarhusChangeCustomer\Entities\;
@@ -101,37 +101,29 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
                     ]
                 );
 
-                if ($settings['aarhuschangecustomer.active']!=="on") {
-                    \Helper::Log("Wibble", "system not active: ");
+                if (($settings['aarhuschangecustomer.active'] ?? 'off') !== 'on') {
                     return $conversation;
                 }
-
-                $rules = [];
-
                 try {
-                    $rules = json_decode($settings['aarhuschangecustomer.ruleset'], 1);
-                }
-                catch (Exception $exception) {
-                    \Helper::Log("Wibble", "Exception when decoding ruleset");
+                    $rules = $this->normalizeRules($settings['aarhuschangecustomer.ruleset'] ?? '');
+                } catch (\InvalidArgumentException $exception) {
+                    \Helper::Log('AarhusChangeCustomer', 'Invalid ruleset; customer unchanged.');
                     return $conversation;
                 }
-
-
-                $body = html_entity_decode($thread->body);
-
+                $body = html_entity_decode((string) ($thread->body ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $matches = $this->checkForMatches($conversation->customer_email, $conversation->mailbox_id, $body, $rules);
-
-                if (!isset($matches["email"])) {
+                if (empty($matches['email']) || !filter_var($matches['email'], FILTER_VALIDATE_EMAIL)) {
                     return $conversation;
                 }
-
-
-
-                $c = Customer::Create($matches["email"], $matches);
-                $c->save();
-                $conversation->changeCustomer($matches["email"], $c);
-
-                \Helper::Log("Wibble", json_encode($matches));
+                $email = \App\Email::sanitizeEmail($matches['email']);
+                if (!$email) {
+                    return $conversation;
+                }
+                $matches['email'] = $email;
+                $replacement = Customer::create($email, $matches);
+                if ($replacement) {
+                    $conversation->changeCustomer($email, $replacement);
+                }
                 return $conversation;
             },
             20,
@@ -176,7 +168,18 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
 
                 $params = [
                 'template_vars' => [],
-                'validator_rules' => [],
+                'validator_rules' => [
+                    'settings.aarhuschangecustomer\\.ruleset' => [
+                        'nullable',
+                        function ($attribute, $value, $fail) {
+                            try {
+                                $this->normalizeRules($value);
+                            } catch (\InvalidArgumentException $exception) {
+                                $fail(__('Invalid ruleset JSON: ') . $exception->getMessage());
+                            }
+                        },
+                    ],
+                ],
                 ];
 
                 return $params;
@@ -208,120 +211,141 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     
      @return array
      */
+    public function normalizeRules($value)
+    {
+        if ($value === '' || $value === null) {
+            return [];
+        }
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \InvalidArgumentException('Invalid JSON syntax.');
+            }
+        }
+        if (!is_array($value)) {
+            throw new \InvalidArgumentException('Expected a sender-to-rules object.');
+        }
+        foreach ($value as $sender => $rules) {
+            if (!is_string($sender) || !filter_var($sender, FILTER_VALIDATE_EMAIL) || !is_array($rules)) {
+                throw new \InvalidArgumentException('Each sender must be an email address with a rule object.');
+            }
+            if (array_key_exists('mailboxes', $rules)) {
+                if (!is_array($rules['mailboxes'])) {
+                    throw new \InvalidArgumentException('mailboxes must be an array of positive mailbox IDs.');
+                }
+                foreach ($rules['mailboxes'] as $id) {
+                    if (!(is_int($id) || (is_string($id) && ctype_digit($id))) || (int) $id < 1) {
+                        throw new \InvalidArgumentException('mailboxes must contain positive mailbox IDs.');
+                    }
+                }
+            }
+            if (array_key_exists('matches', $rules) && !is_array($rules['matches'])) {
+                throw new \InvalidArgumentException('matches must be an array.');
+            }
+            foreach (($rules['matches'] ?? []) as $rule) {
+                if (!is_array($rule)) {
+                    throw new \InvalidArgumentException('Each match group must be an object.');
+                }
+                foreach ($rule as $pattern => $config) {
+                    if (!is_string($pattern) || !is_array($config) || $this->matchPattern($pattern, '', $unused) === false) {
+                        throw new \InvalidArgumentException('Each match requires a valid regular expression and configuration object.');
+                    }
+                    if (array_key_exists('fields', $config) && !is_array($config['fields'])) {
+                        throw new \InvalidArgumentException('fields must be an object of capture indexes.');
+                    }
+                    foreach (($config['fields'] ?? []) as $field => $index) {
+                        if (!is_string($field) || $field === '' || !is_int($index) || $index < 0 || $index === PHP_INT_MAX) {
+                            throw new \InvalidArgumentException('Field capture indexes must be non-negative integers.');
+                        }
+                    }
+                    if (array_key_exists('stop', $config) && !is_string($config['stop'])) {
+                        throw new \InvalidArgumentException('stop must be a string.');
+                    }
+                }
+            }
+        }
+        return $value;
+    }
+
+    private function matchPattern($pattern, $body, &$matches)
+    {
+        // Invalid patterns and PCRE limits must never abort incoming mail processing.
+        set_error_handler(function () { return true; }, E_WARNING);
+        try {
+            return preg_match($pattern, $body, $matches);
+        } finally {
+            restore_error_handler();
+        }
+    }
+
     public function checkForMatches($from, $mailbox, $body, $rules)
     {
-        if (!isset($rules[$from])) {
+        try {
+            $rules = $this->normalizeRules($rules);
+        } catch (\InvalidArgumentException $exception) {
             return [];
         }
-
-
-
-        if (!in_array($mailbox, $rules[$from]["mailboxes"] ?? [$mailbox])) {
+        if (!is_string($from) || !is_string($body) || !isset($rules[$from])) {
             return [];
         }
-
-
-
+        if (!in_array($mailbox, $rules[$from]['mailboxes'] ?? [$mailbox])) {
+            return [];
+        }
         $customer = [];
-        foreach (($rules[$from]["matches"] ?? [])  as $rule) {
-
-            $found = false;
-
-            foreach ($rule as $find=>$config) {
-
-
+        foreach (($rules[$from]['matches'] ?? []) as $rule) {
+            foreach ($rule as $pattern => $config) {
                 $matches = [];
-
-                $r = preg_match($find, $body, $matches);
-
-                if (!$r) {
-                    if (($config["stop"] ?? "_") == "_notfound") {
+                $result = $this->matchPattern($pattern, $body, $matches);
+                if ($result === false) {
+                    return [];
+                }
+                $stop = $config['stop'] ?? '';
+                if (!$result) {
+                    if ($stop === '_notfound' || $stop === '_always') {
                         return $customer;
                     }
                     continue;
                 }
-
-
-                foreach (($config["fields"] ?? []) as $key=>$index) {
-
-                    if (isset($customer[$key])) {
+                foreach (($config['fields'] ?? []) as $field => $index) {
+                    if (isset($customer[$field])) {
                         continue;
                     }
-
-
-                    $value = trim($matches[$index+1] ?? "");
-
-                    if (strlen($value)==0) {
+                    $value = trim($matches[$index + 1] ?? '');
+                    if ($value === '') {
                         continue;
                     }
-
-                    $found = true;
-
-
-                    if ($key!="name") {
-                        $customer[$key]=$value;
+                    if ($field !== 'name') {
+                        $customer[$field] = $value;
                         continue;
                     }
-
-
-                    $n = array_filter(
-                        explode(" ", trim($matches[1], " \n\r\t\v\x00\"")), function ($x) {
-                            return strlen($x)>0;
+                    $parts = preg_split('/\\s+/u', trim($value, " \n\r\t\v\x00\""), 2);
+                    if (!empty($parts[0]) && !isset($customer['first_name'])) {
+                        $customer['first_name'] = $parts[0];
+                    }
+                    if (!empty($parts[1]) && !isset($customer['last_name'])) {
+                        $customer['last_name'] = $parts[1];
+                    }
+                }
+                if ($stop === '_always' || $stop === '_found') {
+                    return $customer;
+                }
+                if ($stop !== '' && $stop !== '_notfound') {
+                    $complete = true;
+                    foreach (explode(',', $stop) as $field) {
+                        $field = trim($field);
+                        if ($field !== '' && !isset($customer[$field])) {
+                            $complete = false;
+                            break;
                         }
-                    );
-
-                    if (isset($n[0])) {
-                                $customer["first_name"]=$n[0];
                     }
-
-                    if (isset($n[1])) {
-                        $customer["last_name"]=$n[1];
+                    if ($complete) {
+                        return $customer;
                     }
                 }
-
-
-
-                if (!isset($config["stop"])) {
-                    continue;
-                }
-
-                if ($config["stop"] === "_always") {
-                    return $customer;
-                }
-
-                if ($config["stop"] === "_found" ) {
-                    return $customer;
-                }
-
-                $f = explode(",", $config["stop"]);
-                $ok = true;
-
-                foreach ($f as $r) {
-                    $r=trim($r);
-                    if (strlen($r)==0 || isset($customer[$r])) {
-                        continue;
-                    }
-                    $ok = false;
-                    break;
-                }
-
-                if ($ok) {
-                    return $customer;
-                }
-
             }
-
         }
         return $customer;
-
-
-
-
     }
-
-
-
-
 
     /**
      Register the service provider.
@@ -424,52 +448,4 @@ class AarhusChangeCustomerServiceProvider extends ServiceProvider
     }
 
 
-    /**
-     Remove the specified resource from storage.
-    
-     @param string $h string of headers
-    
-     @return Response
-     */
-    function getMyHeaders($h)
-    {
-        $h_array = explode("\n", $h);
-
-        foreach ($h_array as $h) {
-
-            // Check if row start with a char
-            if (preg_match("/^[A-Z]/i", $h)) {
-
-                $tmp = explode(":", $h, 2);
-                $header_name = $tmp[0];
-                $header_value = array_reduce(
-                    imap_mime_header_decode(trim($tmp[1])),
-                    function ($carry, $key) {
-                        return $carry . $key->text;
-                    },
-                    ""
-                );
-
-                $headers[$header_name] = $header_value;
-
-            } else {
-                // Append row to previous field
-
-                if (!isset($header_name)) {
-                    \Helper::Log("wibble", json_encode(["failed_to_find headername", $h, $h_array]));
-                } else {
-
-                    $headers[$header_name] = array_reduce(
-                        imap_mime_header_decode(trim($h)),
-                        function ($carry, $key) {
-                            return $carry . $key->text;
-                        },
-                        $headers[$header_name] ?? []
-                    );
-                }
-            }
-
-        }
-        return $headers ?? [];
-    }
 }

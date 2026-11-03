@@ -1,0 +1,59 @@
+name: Release
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (without v prefix)
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+      - name: Validate release version and tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid version tag'; exit 1; }
+          test "$(jq -r .version module.json)" = "$TAG"
+          test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$(git rev-parse HEAD)"
+      - name: Build and verify assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --prefix=AarhusChangeCustomer/ -o AarhusChangeCustomer.zip HEAD
+          printf '%s\n' "$TAG" > version.txt
+          python3 - <<'PY'
+          import json, zipfile
+          with zipfile.ZipFile('AarhusChangeCustomer.zip') as archive:
+              names = archive.namelist()
+              assert all(name.startswith('AarhusChangeCustomer/') for name in names)
+              assert 'AarhusChangeCustomer/vendor/autoload.php' in names
+              assert not any(name.startswith('AarhusChangeCustomer/.github/') for name in names)
+              metadata = json.loads(archive.read('AarhusChangeCustomer/module.json'))
+              assert metadata['version'] == open('version.txt').read().strip()
+          PY
+      - name: Publish release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" AarhusChangeCustomer.zip version.txt --clobber
+          else
+            gh release create "$TAG" AarhusChangeCustomer.zip version.txt --verify-tag --title "$TAG" --generate-notes
+          fi

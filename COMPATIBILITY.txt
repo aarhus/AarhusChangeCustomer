@@ -1,0 +1,146 @@
+UPDATE: Lokaler Kompatibilitaetsbranch codex/php85-freescout-compat
+Fork: https://github.com/cfoellmann/AarhusChangeCustomer
+Die nachfolgende Erstpruefung beschreibt den unveraenderten Upstream-Stand.
+Die dort beschriebenen Laufzeitblocker wurden inzwischen lokal korrigiert.
+Aktuelle Regressionen stehen in Tests/compatibility.php und Tests/hook.php;
+Testumfang und Verhalten sind in README.md dokumentiert.
+Ein vollstaendiger Web-/IMAP-/Datenbanktest steht weiterhin aus.
+
+--- Urspruengliche Pruefung ---
+Kompatibilitaetspruefung AarhusChangeCustomer
+Stand: 03.11.2026
+
+ERGEBNIS
+Der unveraenderte Upstream-Stand ist fuer die produktive Verwendung mit
+FreeScout 1.8.248 / PHP 8.5.12 nicht freizugeben. Zwei unabhaengig lokal
+reproduzierte TypeErrors verhindern den normalen Betrieb mit gespeicherten,
+gueltigen JSON-Regeln. Ein PHP-Syntaxproblem wurde im Modul nicht gefunden.
+Die Fehler beruhen auf dem Umgang mit FreeScouts Option-API; sie sind nicht
+erst durch PHP 8.5 eingefuehrte Syntaxaenderungen.
+
+LOKALE STAENDE
+Modul: https://github.com/aarhus/AarhusChangeCustomer
+Version: 0.0.11, main, f541faa366b47c824709c16358400862b6fee939
+Klon: C:/Users/ChristianFoellmann/Projekte/AarhusChangeCustomer
+Core: https://github.com/freescout-helpdesk/freescout/tree/1.8.248
+Tag: 1.8.248, Commit 56c4d014cfbd5e0b038cc887d71e0c75fd6c3f1b
+Referenzquellen: .compat/freescout-1.8.248/
+Laufzeit: PHP CLI 8.5.12 (Windows, NTS, x64)
+
+BLOCKER 1: GESPEICHERTE REGELN STOPPEN MAILVERARBEITUNG
+Providers/AarhusChangeCustomerServiceProvider.php:112,114
+FreeScout App/Option.php: maybeUnserialize() dekodiert JSON-Objekte/Arrays,
+wenn der gespeicherte String direkt mit { oder [ beginnt. getOptions()
+liefert diese bereits als Array. Das Modul ruft json_decode(array, 1) auf:
+TypeError: json_decode(): Argument #1 ($json) must be of type string, array given
+Die Exception-Behandlung hilft nicht: TypeError ist kein Exception, und
+der unqualifizierte Name Exception wird im Modul-Namespace aufgeloest.
+Auswirkung: Der registrierte conversation.created_by_customer-Callback bricht ab.
+Ein kompletter IMAP-Fetchlauf wurde nicht ausgefuehrt; dessen konkretes
+Retry-/Zustellverhalten ist damit nicht bestimmt.
+Loesung: Regeln als Array akzeptieren und Strings kontrolliert dekodieren;
+Typ und Schema vor der Verwendung validieren.
+
+BLOCKER 2: EINSTELLUNGSSEITE STUERZT NACH SPEICHERN AB
+Resources/views/index.blade.php:20
+Dasselbe Array wird von Blade via e()/htmlspecialchars() ausgegeben.
+TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, array given
+Mit dem echten BladeCompiler und e()-Helper aus FreeScout 1.8.248 reproduziert.
+Dies bestaetigt das offene Upstream-Issue #6.
+Loesung: Array fuer die Textarea in JSON zurueckwandeln; HTML-Escaping behalten.
+Nur die View zu reparieren genuegt wegen Blocker 1 nicht.
+Hinweis: Fuehrende Leerzeichen vor dem JSON verhindern FreeScouts automatische
+Dekodierung in diesem Codepfad. Das ist keine robuste Fehlerbehebung.
+
+WEITERE REPRODUZIERTE FEHLER
+- Provider:130-131: Customer::create() gibt bei unbrauchbarer E-Mail null
+  zurueck; danach folgt ungeprueft save(). Ergebnis: Call to a member function
+  save() on null. Im Test mit echter App/Customer::create()-Methode und
+  'not-an-email' reproduziert, noch vor jeglichem Datenbankzugriff.
+- Provider:268-278: 'Sir John Doe' wird zu Vorname 'Sir', Nachname 'John';
+  'Doe' geht verloren. Im Kommentarverlauf von Issue #1 bereits beschrieben.
+- Provider:268: Das Feld name benutzt immer Capture-Gruppe 1 statt der
+  konfigurierten Gruppe. fields.name=1 liefert bei /(Label): (.+)/ den
+  Namen 'Label' statt 'Jane Smith'.
+- Keine Validierungsregeln fuer die Konfiguration (Provider:179).
+  mailboxes als Zahl statt Array erzeugt einen in_array()-TypeError.
+  Ein ungueltiger Regex erzeugt eine preg_match()-Warnung; im strikten
+  Test-Errorhandler wird diese zur ErrorException. Nicht jeder
+  Produktions-Errorhandler behandelt Warnungen identisch.
+
+FREESCOUT-SCHNITTSTELLEN
+Im exakten Tag vorhanden und von den Aufrufen her passend:
+- conversation.created_by_customer wird mit Conversation, Thread, Customer
+  aus FetchEmails.php ausgeloest (Action; auch ein separater Filter existiert).
+- settings.sections / settings.section_settings / settings.section_params /
+  settings.view sind vorhanden.
+- Customer::create($email, $data) und Conversation::changeCustomer($email,
+  $customer, ...) passen zu den verwendeten Aufrufen.
+- Provider laedt mit dem echten Illuminate ServiceProvider aus dem Core.
+- Der Core hat eigene PHP-Kompatibilitaetsoverrides; allein aus seiner alten
+  Laravel-Version darf daher kein zusaetzliches Kompatibilitaetsurteil
+  abgeleitet werden.
+Sekundaerbefund: composer.json sowie mitgelieferter Composer-Autoloader
+nennen irrtuemlich Modules\\UnSub\\. FreeScouts Modules\\-Autoloading kann den
+Provider trotzdem aufloesen. Bei Bereinigung des Moduls korrigieren.
+Die ungenutzten getMyHeaders()-Hilfsmethoden rufen imap_mime_header_decode()
+auf. Diese Funktion fehlt in der lokalen PHP-Konfiguration; der getestete
+aktive Verarbeitungspfad verwendet diese Methoden nicht.
+
+GITHUB-ISSUES UND PULL REQUESTS
+Alle vom Repository gelieferten offenen und geschlossenen Eintraege geprueft:
+vier Issues und zwei PRs. Issue #1 hat acht Kommentare; diese mitgelesen.
+Alle anderen Eintraege melden null Diskussionskommentare.
+- #6 OPEN: Settings-Crash nach gueltigem JSON. Lokal bestaetigt.
+  https://github.com/aarhus/AarhusChangeCustomer/issues/6
+- #1 OPEN: Regelformat/HTML-Matching. Senderabgleich erfolgt auf exakte
+  E-Mail-Adresse; Regex arbeitet auf html_entity_decode(thread.body), nicht
+  auf einer ausschliesslich sichtbaren Textdarstellung. Im Kommentarverlauf
+  ist auch der Verlust mehrteiliger Namen beschrieben und lokal bestaetigt.
+  https://github.com/aarhus/AarhusChangeCustomer/issues/1
+- #5 OPEN: Automatische Kundenauswahl anhand der Domain ist ein
+  Featurewunsch und im geprueften Code nicht implementiert.
+  https://github.com/aarhus/AarhusChangeCustomer/issues/5
+- #2 CLOSED: Aktivierungsfehler durch falschen entpackten Modulordner.
+  Der technische Installationsordner muss AarhusChangeCustomer heissen.
+  https://github.com/aarhus/AarhusChangeCustomer/issues/2
+- PR #3 MERGED: Installationsanleitung fuer diesen Ordnernamen korrigiert;
+  im geklonten main enthalten. Keine Behebung der aktuellen JSON-Fehler.
+  https://github.com/aarhus/AarhusChangeCustomer/pull/3
+- PR #7 OPEN: composer.lock hebt PHP_CodeSniffer von 3.10.1 auf 3.13.6.
+  Diff geprueft: ausschliesslich composer.lock, kein Modul-Laufzeitcode.
+  Laut PR enthaelt die neuere Toolversion PHP-8.5-Unterstuetzung und einen
+  Sicherheitsfix. Der PR loest die beiden Laufzeitblocker nicht.
+  Der eingebuchte vendor/-Baum enthaelt weiterhin PHPCS 3.10.1; ein reines
+  Lockfile-Update aktualisiert diese Dateien ohne Composer-Installation nicht.
+  https://github.com/aarhus/AarhusChangeCustomer/pull/7
+
+LOKALE VALIDIERUNG
+Befehl im Modulverzeichnis:
+  php -d display_errors=1 Tests/compatibility.php
+15 Audit-Pruefungen erfolgreich, davon sieben gezielte Fehlerreproduktionen.
+PASS bei einem BUG-/CRITICAL-Test bedeutet: Fehler reproduziert, nicht behoben.
+Syntaxpruefung: alle sechs PHP-Moduldateien ausserhalb von Blade/vendor
+ohne Syntaxfehler und ohne zusaetzliche Meldungen unter PHP 8.5.12.
+Erfolgreich: Provider laden, Option-Dekodierung bestaetigen, deaktivierten
+Hook ausfuehren, E-Mail extrahieren, Postfach und unbekannten Sender abgrenzen.
+Ausgabe: .compat/audit-output.txt
+GitHub-Snapshot inkl. Kommentarverlauf und PR-7-Diff: .compat/github-review.json
+
+GRENZEN UND NAECHSTER SCHRITT
+Keine laufende FreeScout-Webinstanz, kein IMAP, keine Datenbankmigration
+und kein erfolgreicher Kundenwechsel mit Datenbank-Persistenz getestet.
+Der lokale Docker-Daemon ist nicht gestartet. Die vorhandene CLI-PHP-
+Konfiguration hat ausserdem u.a. keine PDO-Datenbanktreiber, mbstring,
+openssl oder curl geladen. Diese Umgebung ist damit keine vollstaendige
+FreeScout-Laufzeit. Die Blocker sind trotzdem mit den Original-Coreklassen,
+der Original-View und dem Original-Modulcallback reproduziert.
+Eventy-Registrierung, Logausgabe und Request-Helfer sind im Test ersetzt;
+die Hook-Closure wird direkt aufgerufen. Option-getOptions verwendet den
+echten Core-Cachepfad mit durch maybeUnserialize() dekodierten Testwerten.
+Keine Modul-Laufzeitdateien veraendert, nichts gepusht oder installiert.
+Vor produktiver Freigabe: beide JSON-Pfade reparieren, Konfiguration und
+extrahierte E-Mail absichern, dann isolierten Web-/Datenbank-/Mailtest mit
+der Zielkonfiguration durchfuehren.
+
+

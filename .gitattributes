@@ -1,0 +1,6 @@
+# Release archive contains runtime files and documentation only.
+/.github export-ignore
+/.gitattributes export-ignore
+/Tests export-ignore
+/COMPATIBILITY.txt export-ignore
+/images export-ignore

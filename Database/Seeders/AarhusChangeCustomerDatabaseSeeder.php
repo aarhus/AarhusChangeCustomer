@@ -26,10 +26,10 @@
  * @deprecated File deprecated in Release 2.0.0
  */
 
-namespace Modules\UnSub\Database\Seeders;
+namespace Modules\AarhusChangeCustomer\Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Database\Eloquent\Model;
+
 
 /**
  * Please use them in the order they appear here.  phpDocumentor has
@@ -47,7 +47,7 @@ use Illuminate\Database\Eloquent\Model;
  * @since      Class available since Release 1.2.0
  * @deprecated Class deprecated in Release 2.0.0
  */
-class UnSubDatabaseSeeder extends Seeder
+class AarhusChangeCustomerDatabaseSeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -56,8 +56,8 @@ class UnSubDatabaseSeeder extends Seeder
      */
     public function run()
     {
-        Model::unguard();
 
-        // $this->call("OthersTableSeeder");
+
+        // This module has no seed data.
     }
 }
