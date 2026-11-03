@@ -48,3 +48,15 @@ Other installations are possible, but not supported here.
 7. Use and enjoy!
 
 8. [Buy Matt a Coffee](https://ko-fi.com/aarhus)
+
+## Releases from the maintained fork
+
+For the PHP 8.5 compatibility fork, use the releases at
+https://github.com/cfoellmann/AarhusChangeCustomer/releases.
+After the first release containing native update support is published,
+download its `AarhusChangeCustomer.zip` asset, rather than GitHub's generated
+source archive. Extract it directly into `Modules/`; the archive already has
+the correct `AarhusChangeCustomer/` root directory.
+Older installations need one manual replacement to acquire the update URLs.
+Subsequent updates are offered by FreeScout using the latest release's
+`version.txt` and `AarhusChangeCustomer.zip`. See README for publishing steps.
